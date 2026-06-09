@@ -488,15 +488,15 @@ function generatePreview(mmGroups, totals, reportDate, sheetTitle) {
     <div class="kpi-bar">
       <div class="kpi-date"><div class="label">Date</div><div class="date-val">${reportDate}</div><div class="day">${dayName}</div></div>
       <div class="kpi-item kpi-blue">
-        <div class="kpi-icon"><img src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/c21hbGxjcmF0ZV93bTVxcmc=/template_primary" alt="Small Crate"></div>
+        <div class="kpi-icon"><img crossorigin="anonymous" src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/c21hbGxjcmF0ZV93bTVxcmc=/template_primary" alt="Small Crate"></div>
         <div class="kpi-info"><div class="cap">Total<br>Small Crates</div><div class="val">${totals.totalSmall.toLocaleString('en-IN')}</div></div>
       </div>
       <div class="kpi-item kpi-green">
-        <div class="kpi-icon"><img src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/YmlnY3JhdGVfb2U2cmxq/template_primary" alt="Big Crate"></div>
+        <div class="kpi-icon"><img crossorigin="anonymous" src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/YmlnY3JhdGVfb2U2cmxq/template_primary" alt="Big Crate"></div>
         <div class="kpi-info"><div class="cap">Total<br>Big Crates</div><div class="val">${totals.totalBig.toLocaleString('en-IN')}</div></div>
       </div>
       <div class="kpi-item kpi-orange">
-        <div class="kpi-icon"><img src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/aW5zdWxhdGVkYm94X2dkbGNxYw==/template_primary" alt="Insulated Box"></div>
+        <div class="kpi-icon"><img crossorigin="anonymous" src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/aW5zdWxhdGVkYm94X2dkbGNxYw==/template_primary" alt="Insulated Box"></div>
         <div class="kpi-info"><div class="cap">Total<br>Insulated Box</div><div class="val">${totals.totalPuff.toLocaleString('en-IN')}</div></div>
       </div>
       <div class="kpi-item kpi-navy">
@@ -611,9 +611,14 @@ async function generatePDF() {
     const RENDER_W = 1200;
 
     fill.style.width = '10%';
+    const images = Array.from(reportEl.querySelectorAll('.kpi-icon img'));
+    await Promise.all(images.map(img => img.decode().catch(() => {})));
+
     const canvas = await html2canvas(reportEl, {
       scale       : 2,
       useCORS     : true,
+      allowTaint  : false,
+      imageTimeout: 15000,
       logging     : false,
       backgroundColor: '#ffffff',
       width       : RENDER_W,
@@ -722,9 +727,14 @@ async function sendOutlookEmail() {
 
     status.textContent = 'Capturing full report image…';
 
+    const images = Array.from(reportEl.querySelectorAll('.kpi-icon img'));
+    await Promise.all(images.map(img => img.decode().catch(() => {})));
+
     const fullCanvas = await html2canvas(reportEl, {
       scale: 1.5,
       useCORS: true,
+      allowTaint: false,
+      imageTimeout: 15000,
       logging: false,
       backgroundColor: '#ffffff',
       windowWidth: 1100,
