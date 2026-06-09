@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MM Wise Crates Holding Report</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+/* ===== RESET ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#003366;--blue:#005BAC;--green:#1B7A3E;--orange:#E07B00;
+  --gold:#F59E0B;--bg:#EEF2F7;--white:#fff;
+  --gray-100:#F8FAFC;--gray-200:#E2E8F0;--gray-300:#CBD5E1;--gray-600:#475569;--text:#1E293B;
+  --shadow:0 2px 12px rgba(0,51,102,.10);--shadow-lg:0 4px 24px rgba(0,51,102,.15);
+}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ===== UPLOAD ===== */
+#uploadScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+.upload-card{background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);padding:48px 40px;max-width:520px;width:100%;text-align:center}
+.upload-logo{display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;background:var(--navy);border-radius:16px;margin-bottom:20px}
+.upload-logo svg{width:40px;height:40px;fill:none;stroke:white;stroke-width:2}
+.upload-card h1{font-size:22px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.upload-card>p{color:var(--gray-600);font-size:14px;margin-bottom:28px;line-height:1.6}
+.drop-zone{border:2px dashed var(--blue);border-radius:12px;padding:36px 20px;background:#F0F7FF;cursor:pointer;transition:all .2s;margin-bottom:20px}
+.drop-zone:hover,.drop-zone.drag-over{background:#D6EAFF;border-color:var(--navy)}
+.drop-zone svg{width:44px;height:44px;stroke:var(--blue);stroke-width:1.5;fill:none;margin-bottom:10px}
+.drop-zone p{color:var(--blue);font-weight:600;font-size:15px}
+.drop-zone span{color:var(--gray-600);font-size:13px}
+#fileInput{display:none}
+.btn-primary{background:linear-gradient(135deg,var(--navy),var(--blue));color:white;border:none;border-radius:10px;padding:13px 28px;font-size:15px;font-weight:600;cursor:pointer;width:100%;transition:opacity .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary:hover{opacity:.9}.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.error-msg{background:#FEE2E2;border:1px solid #FCA5A5;border-radius:8px;padding:10px 14px;color:#B91C1C;font-size:13px;margin-top:12px;display:none}
+.selected-file{background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;padding:10px 14px;color:var(--green);font-size:13px;font-weight:500;margin-bottom:14px;display:none}
+
+/* ===== LOADING ===== */
+#loadingScreen{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+.spinner{width:56px;height:56px;border:5px solid var(--gray-200);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:18px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loadingScreen p{color:var(--navy);font-weight:600;font-size:16px}
+#loadingMsg{color:var(--gray-600);font-size:13px;margin-top:6px}
+
+/* ===== REPORT SCREEN ===== */
+#reportScreen{display:none}
+.toolbar{background:var(--navy);padding:12px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.toolbar-title{color:white;font-weight:700;font-size:15px;flex:1;display:flex;align-items:center;gap:8px}
+.toolbar-title img{width:18px;height:18px;display:inline-block;vertical-align:middle}
+.selected-file img{width:18px;height:18px;display:inline-block;vertical-align:middle;margin-right:8px}
+.footer-left img,.footer-right img{width:18px;height:18px;display:inline-block;vertical-align:middle;margin-right:8px}
+.btn-tool{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-pdf{background:#E65100;color:white}.btn-pdf:hover{background:#BF360C}
+.btn-email{background:#0078D4;color:white}.btn-email:hover{background:#005A9E}
+.btn-print{background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3)}.btn-print:hover{background:rgba(255,255,255,.25)}
+.btn-back{background:rgba(255,255,255,.1);color:white;border:1px solid rgba(255,255,255,.2)}.btn-back:hover{background:rgba(255,255,255,.2)}
+.btn-tool svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2}
+.pdf-progress{display:none}
+.pdf-progress.active{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.12);border-radius:8px;padding:8px 14px}
+.pdf-progress span{color:white;font-size:12px}
+.prog-bar{flex:1;height:4px;background:rgba(255,255,255,.2);border-radius:2px}
+.prog-fill{height:100%;background:var(--gold);border-radius:2px;transition:width .3s}
+
+.report-wrapper{max-width:1100px;margin:0 auto;padding:20px}
+.report-page{background:white;border-radius:10px;overflow:hidden;box-shadow:var(--shadow-lg);margin-bottom:24px}
+
+/* ===== REPORT HEADER ===== */
+.rpt-header{background:linear-gradient(135deg,var(--navy) 0%,#004A90 60%,var(--blue) 100%);padding:22px 28px 20px;display:flex;align-items:center;gap:20px;position:relative;overflow:hidden}
+.rpt-header::after{content:'';position:absolute;right:-40px;top:-40px;width:200px;height:200px;background:rgba(255,255,255,.04);border-radius:50%}
+.header-icon{width:58px;height:58px;background:rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.header-icon svg{width:34px;height:34px;stroke:white;fill:none;stroke-width:1.8}
+.header-text{flex:1}
+.header-text .subtitle{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:1px;margin-bottom:6px}
+.header-text .subtitle .ffdc-label{color:#F59E0B;font-size:14px;font-weight:900;letter-spacing:1.5px}
+.header-text h1{font-size:24px;font-weight:800;color:white;line-height:1.2;margin-bottom:2px}
+.header-text h1 span{color:var(--gold)}
+.header-text .tagline{font-size:12px;color:rgba(255,255,255,.7);font-style:italic}
+
+/* ===== KPI BAR ===== */
+.kpi-bar{display:grid;grid-template-columns:180px 1fr 1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--gray-200);background:white}
+.kpi-date{padding:18px 20px;border-right:1px solid var(--gray-200);display:flex;flex-direction:column;justify-content:center}
+.kpi-date .label{font-size:10px;color:var(--gray-600);font-weight:600;letter-spacing:1px;text-transform:uppercase}
+.kpi-date .date-val{font-size:20px;font-weight:800;color:var(--navy);margin-top:2px}
+.kpi-date .day{font-size:11px;color:var(--gray-600);margin-top:1px}
+.kpi-item{padding:14px 16px;border-right:1px solid var(--gray-200);display:flex;align-items:center;gap:10px}
+.kpi-item:last-child{border-right:none}
+.kpi-icon{width:46px;height:46px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kpi-icon svg,
+.kpi-icon img{width:30px;height:30px;display:block;object-fit:contain}
+.kpi-blue .kpi-icon{background:#DBEAFE}
+.kpi-green .kpi-icon{background:#DCFCE7}
+.kpi-orange .kpi-icon{background:#FEF3C7}
+.kpi-navy .kpi-icon{display:none}
+.kpi-navy{background:transparent}
+.kpi-info .cap{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray-600);margin-bottom:2px}
+.kpi-blue .kpi-info .cap{color:var(--blue)}.kpi-green .kpi-info .cap{color:var(--green)}.kpi-orange .kpi-info .cap{color:var(--orange)}.kpi-navy .kpi-info .cap{color:var(--navy)}
+.kpi-info .val{font-size:22px;font-weight:800}
+.kpi-blue .kpi-info .val{color:var(--blue)}.kpi-green .kpi-info .val{color:var(--green)}.kpi-orange .kpi-info .val{color:var(--orange)}.kpi-navy .kpi-info .val{color:var(--navy)}
+
+/* ===== SUMMARY TABLE ===== */
+.section{padding:0 28px 24px}
+.section-title{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:white;background:var(--navy);padding:9px 16px;border-radius:6px;margin:24px 0 14px;display:block}
+.summary-table{width:100%;border-collapse:collapse;font-size:14px}
+.summary-table thead th{background:#1E3A5F;color:white;padding:11px 16px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase}
+.summary-table thead th:not(:first-child){text-align:right}
+.summary-table tbody tr{border-bottom:1px solid var(--gray-200)}
+.summary-table tbody tr:hover{background:var(--gray-100)}
+.summary-table tbody td{padding:11px 16px}
+.summary-table tbody td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.summary-table tfoot tr{background:var(--navy)}
+.summary-table tfoot td{padding:12px 16px;color:white;font-weight:700;font-size:14px}
+.summary-table tfoot td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+
+/* ===== MM GRID — 2-col side by side ===== */
+.mm-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:0 28px 28px}
+.mm-card{border-radius:10px;overflow:hidden;border:1px solid var(--gray-200);box-shadow:0 1px 6px rgba(0,0,0,.07)}
+.mm-card-header{padding:14px 18px;color:white;display:flex;align-items:center;gap:10px}
+.mm-badge{width:34px;height:34px;background:rgba(255,255,255,.22);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;letter-spacing:.5px}
+.mm-card-header h3{font-size:15px;font-weight:700;line-height:1.2}
+.mm-card-header p{font-size:11px;opacity:.8;font-weight:400;margin-top:1px}
+.mm-card-body{background:white}
+
+/* MM table — spacious like image 2 */
+.mm-table{width:100%;border-collapse:collapse;font-size:13px}
+.mm-table thead th{background:#F1F5F9;color:var(--gray-600);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-bottom:2px solid var(--gray-200)}
+.mm-table thead th:nth-child(n+3){text-align:right}
+.mm-table tbody tr{border-bottom:1px solid #F1F5F9}
+.mm-table tbody tr:last-child{border-bottom:none}
+.mm-table tbody tr:hover{background:#F8FAFC}
+.mm-table tbody td{padding:9px 12px;line-height:1.3}
+.mm-table tbody td:nth-child(n+3){text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+.mm-table tbody td.site-name{color:var(--gray-600);font-size:12.5px;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm-table tbody td.site-code{font-weight:700;font-size:13px;color:var(--text)}
+.mm-table tbody td.total-col{font-weight:700;color:var(--text)}
+.mm-table .dash{color:#CBD5E1}
+.mm-table tfoot tr{border-top:2px solid var(--gray-300)}
+.mm-table tfoot td{padding:10px 12px;font-weight:700;font-size:13px}
+.mm-table tfoot td:nth-child(n+3){text-align:right}
+
+/* MM card color themes */
+.mm-c0 .mm-card-header{background:linear-gradient(135deg,#003366,#005BAC)}
+.mm-c0 .mm-table tfoot{background:#EBF2FF}.mm-c0 .mm-table tfoot td{color:var(--navy)}
+.mm-c1 .mm-card-header{background:linear-gradient(135deg,#1B7A3E,#22A052)}
+.mm-c1 .mm-table tfoot{background:#ECFDF5}.mm-c1 .mm-table tfoot td{color:var(--green)}
+.mm-c2 .mm-card-header{background:linear-gradient(135deg,#92400E,#D97706)}
+.mm-c2 .mm-table tfoot{background:#FFFBEB}.mm-c2 .mm-table tfoot td{color:#92400E}
+.mm-c3 .mm-card-header{background:linear-gradient(135deg,#6B21A8,#9333EA)}
+.mm-c3 .mm-table tfoot{background:#FAF5FF}.mm-c3 .mm-table tfoot td{color:#6B21A8}
+.mm-c4 .mm-card-header{background:linear-gradient(135deg,#BE123C,#E11D48)}
+.mm-c4 .mm-table tfoot{background:#FFF1F2}.mm-c4 .mm-table tfoot td{color:#BE123C}
+.mm-c5 .mm-card-header{background:linear-gradient(135deg,#0F766E,#14B8A6)}
+.mm-c5 .mm-table tfoot{background:#F0FDFA}.mm-c5 .mm-table tfoot td{color:#0F766E}
+
+/* request & footer */
+.request-section{background:#EFF6FF;border-top:1px solid var(--gray-200);padding:20px 28px}
+.request-title{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--navy);text-align:center;margin-bottom:14px}
+.request-items{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.req-item{background:white;border-radius:8px;padding:14px 12px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06);border-top:3px solid var(--blue)}
+.req-item .req-icon{width:34px;height:34px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center}
+.req-item .req-icon svg{width:24px;height:24px;display:block}
+.req-item p{font-size:11px;color:var(--navy);font-weight:600;line-height:1.4}
+.header-text .subtitle{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:1px;margin-bottom:6px}
+.header-text .subtitle .ffdc-label{color:#F59E0B;font-size:14px;font-weight:900;letter-spacing:1.5px}
+.rpt-footer{background:var(--navy);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.footer-left{display:flex;align-items:center;gap:10px}
+.footer-left p{color:white;font-size:12px;font-weight:600}
+.footer-left span{color:rgba(255,255,255,.7);font-size:11px}
+.footer-right{text-align:right}
+.footer-right p{color:white;font-size:12px;font-weight:600}
+.footer-right span{color:rgba(255,255,255,.7);font-size:11px}
+
+/* ===== EMAIL LOADING OVERLAY ===== */
+#emailOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;align-items:center;justify-content:center}
+#emailOverlay.active{display:flex}
+.email-modal{background:white;border-radius:16px;padding:36px 40px;text-align:center;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.email-modal .e-spinner{width:48px;height:48px;border:4px solid #E2E8F0;border-top-color:#0078D4;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+.email-modal h3{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.email-modal p{color:var(--gray-600);font-size:13px;line-height:1.5}
+.email-modal .e-note{margin-top:12px;font-size:11px;color:#94A3B8;background:#F8FAFC;border-radius:6px;padding:8px 12px}
+
+@media(max-width:700px){
+  .kpi-bar{grid-template-columns:1fr 1fr}.kpi-date{grid-column:1/-1}
+  .mm-grid{grid-template-columns:1fr}
+  .request-items{grid-template-columns:1fr 1fr}
+  .rpt-header h1{font-size:18px}
+}
+@media print{
+  .toolbar{display:none!important}
+  body{background:white}
+  .report-page{box-shadow:none;border-radius:0;margin:0}
+  .report-wrapper{padding:0;max-width:100%}
+  .mm-grid{page-break-inside:avoid}
+  .mm-card{page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+
+<!-- UPLOAD -->
+<div id="uploadScreen">
+  <div class="upload-card">
+    <div class="upload-logo">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9h10M7 12h6"/></svg>
+    </div>
+    <h1>MM Wise Crates Report Generator</h1>
+    <p>Upload your Excel holding data file to generate a professional crates holding report with PDF export and email sharing.</p>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p>Click to upload or drag &amp; drop</p>
+      <span>Supports .xlsx and .xls files</span>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div class="selected-file" id="selectedFile"><img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Crect%20x='3'%20y='3'%20width='14'%20height='18'%20rx='2'%20fill='%23003366'/%3E%3Cpath%20d='M7%207h6M7%2011h6'%20stroke='%23ffffff'%20stroke-width='2'%20stroke-linecap='round'/%3E%3C/svg%3E" alt="File icon"><span id="fileName"></span></div>
+    <div class="error-msg" id="errorMsg"></div>
+    <button class="btn-primary" id="generateBtn" disabled onclick="processFile()">
+      <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:white;fill:none;stroke-width:2"><path d="M9 17H7A5 5 0 017 7h2M15 7h2a5 5 0 010 10h-2M8 12h8"/></svg>
+      Generate Report
+    </button>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <p>Building Your Report</p>
+  <div id="loadingMsg">Parsing Excel data...</div>
+</div>
+
+<!-- REPORT -->
+<div id="reportScreen">
+  <div class="toolbar">
+    <span class="toolbar-title"><img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Crect%20x='3'%20y='6'%20width='18'%20height='12'%20rx='2'%20fill='%23ffffff'%20stroke='%23003366'%20stroke-width='2'/%3E%3Cpath%20d='M7%2010h4M7%2014h4M13%2010h4M13%2014h4'%20stroke='%23003366'%20stroke-width='2'/%3E%3C/svg%3E" alt="Report icon">MM Wise Crates Holding Report</span>
+    <div class="pdf-progress" id="pdfProgress">
+      <span id="pdfProgressText">Processing...</span>
+      <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    </div>
+    <button class="btn-tool btn-back" onclick="resetApp()">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> New Upload
+    </button>
+    <button class="btn-tool btn-print" onclick="window.print()">
+      <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Print
+    </button>
+    <button class="btn-tool btn-email" id="emailBtn" onclick="sendOutlookEmail()">
+      <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send via Outlook
+    </button>
+    <button class="btn-tool btn-pdf" id="pdfBtn" onclick="generatePDF()">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg> Download PDF
+    </button>
+  </div>
+  <div class="report-wrapper">
+    <div class="report-page" id="reportContent"></div>
+  </div>
+</div>
+
+<!-- EMAIL LOADING OVERLAY -->
+<div id="emailOverlay">
+  <div class="email-modal">
+    <div class="e-spinner"></div>
+    <h3>Preparing Email</h3>
+    <p id="emailStatus">Capturing report screenshots…</p>
+    <div class="e-note">This may take 15–30 seconds depending on data size. Outlook will open automatically.</div>
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   STATE
+================================================================ */
+let parsedData = null;
+
+/* ================================================================
+   FILE HANDLING
+================================================================ */
+const fileInput = document.getElementById('fileInput');
+const dropZone  = document.getElementById('dropZone');
+
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file) {
+  const err = document.getElementById('errorMsg');
+  const sel = document.getElementById('selectedFile');
+  const btn = document.getElementById('generateBtn');
+  err.style.display = 'none';
+  if (!file) return;
+  if (!/\.(xlsx|xls)$/i.test(file.name)) {
+    err.textContent = 'Please upload a valid .xlsx or .xls file.';
+    err.style.display = 'block'; sel.style.display = 'none'; btn.disabled = true; return;
+  }
+  document.getElementById('fileName').textContent = file.name;
+  sel.style.display = 'block'; btn.disabled = false;
+  window._uploadedFile = file;
+}
+
+/* ================================================================
+   PARSE EXCEL
+================================================================ */
+function parseExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb   = XLSX.read(e.target.result, { type:'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+        resolve({ rows, sheetName: wb.SheetNames[0] });
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* ================================================================
+   GROUP BY MM — descending sort per manager
+================================================================ */
+function groupByMM(rows) {
+  const groups = [];
+  let currentMM = null;
+
+  for (let i = 2; i < rows.length; i++) {
+    const row  = rows[i];
+    if (!row || row.every(c => c === null || c === '')) continue;
+
+    const col0 = row[0] ? String(row[0]).trim() : null;
+    const col1 = row[1] ? String(row[1]).trim() : null;
+
+    // Total row
+    if (col0 && col0.toLowerCase().includes(' total') && !col1) {
+      if (currentMM) {
+        currentMM.totalSmall = toNum(row[3]);
+        currentMM.totalPuff  = toNum(row[4]);
+        currentMM.totalBig   = toNum(row[5]);
+        currentMM.grandTotal = currentMM.totalSmall + currentMM.totalPuff + currentMM.totalBig;
+        // Sort stores descending by total
+        currentMM.stores.sort((a,b) => b.total - a.total);
+        groups.push(currentMM);
+        currentMM = null;
+      }
+      continue;
+    }
+
+    // New MM name
+    if (col0 && col1) {
+      if (currentMM) { currentMM.stores.sort((a,b)=>b.total-a.total); groups.push(currentMM); }
+      currentMM = { name: col0, stores: [] };
+    }
+
+    // Store row
+    if (currentMM && col1) {
+      const sm = toNum(row[3]), pf = toNum(row[4]), bg = toNum(row[5]);
+      currentMM.stores.push({ code: col1, name: row[2] ? String(row[2]).trim() : '', small: sm, puff: pf, big: bg, total: sm + pf + bg });
+    }
+  }
+  if (currentMM) { currentMM.stores.sort((a,b)=>b.total-a.total); groups.push(currentMM); }
+
+  // Recalculate totals if needed
+  groups.forEach(mm => {
+    if (!mm.totalSmall && mm.totalSmall !== 0) {
+      mm.totalSmall = mm.stores.reduce((s,r)=>s+r.small,0);
+      mm.totalPuff  = mm.stores.reduce((s,r)=>s+r.puff ,0);
+      mm.totalBig   = mm.stores.reduce((s,r)=>s+r.big  ,0);
+      mm.grandTotal = mm.totalSmall + mm.totalPuff + mm.totalBig;
+    }
+  });
+  return groups;
+}
+
+function calculateTotals(mmGroups) {
+  let ts=0,tp=0,tb=0;
+  mmGroups.forEach(mm=>{ ts+=mm.totalSmall; tp+=mm.totalPuff; tb+=mm.totalBig; });
+  return { totalSmall:ts, totalPuff:tp, totalBig:tb, grandTotal:ts+tp+tb };
+}
+
+function toNum(v) { const n=parseFloat(v); return isNaN(n)?0:Math.round(n); }
+function fmt(n)  { return n===0?'<span class="dash">–</span>':n.toLocaleString('en-IN'); }
+
+function extractDate(rows, sheetName) {
+  if (/\d{2}\.\d{2}\.\d{4}/.test(sheetName)) return sheetName;
+  if (rows[0]&&rows[0][3]) return String(rows[0][3]);
+  return new Date().toLocaleDateString('en-IN');
+}
+function parseDate(str) {
+  if (!str) return null;
+  const p = str.split('.');
+  if (p.length===3) return new Date(+p[2],+p[1]-1,+p[0]);
+  return null;
+}
+
+function formatFfdcText(sheetTitle) {
+  const raw = sheetTitle ? String(sheetTitle).split(' ')[0] : 'FFDC';
+  let text = raw.toUpperCase().includes('FFDC') ? raw : raw + ' FFDC';
+  if (/^SP9H\b/i.test(text) && !/KANDLAKOYA/i.test(text)) {
+    text = text.replace(/SP9H/i, 'SP9H KANDLAKOYA');
+  }
+  return text;
+}
+
+/* ================================================================
+   HTML GENERATORS
+================================================================ */
+function generateSummary(mmGroups, totals) {
+  const rows = mmGroups.map(mm=>`
+    <tr>
+      <td>${mm.name}</td>
+      <td>${mm.totalSmall.toLocaleString('en-IN')}</td>
+      <td>${mm.totalBig.toLocaleString('en-IN')}</td>
+      <td>${mm.totalPuff.toLocaleString('en-IN')}</td>
+      <td><strong>${mm.grandTotal.toLocaleString('en-IN')}</strong></td>
+    </tr>`).join('');
+  return `
+  <div class="section">
+    <span class="section-title">MM Wise Holding Summary</span>
+    <table class="summary-table">
+      <thead><tr><th>MM Wise</th><th>Small Crates</th><th>Big Crates</th><th>Insulated Box</th><th>Grand Total</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td><strong>GRAND TOTAL</strong></td>
+        <td>${totals.totalSmall.toLocaleString('en-IN')}</td>
+        <td>${totals.totalBig.toLocaleString('en-IN')}</td>
+        <td>${totals.totalPuff.toLocaleString('en-IN')}</td>
+        <td>${totals.grandTotal.toLocaleString('en-IN')}</td>
+      </tr></tfoot>
+    </table>
+  </div>`;
+}
+
+function generateMMTables(mmGroups) {
+  const cards = mmGroups.map((mm,idx)=>{
+    const cc = `mm-c${idx%6}`;
+    const initials = mm.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    const storeRows = mm.stores.map(s=>`
+      <tr>
+        <td class="site-code">${s.code}</td>
+        <td class="site-name" title="${s.name}">${s.name}</td>
+        <td>${fmt(s.small)}</td>
+        <td>${fmt(s.big)}</td>
+        <td>${fmt(s.puff)}</td>
+        <td class="total-col">${fmt(s.total)}</td>
+      </tr>`).join('');
+    return `
+    <div class="mm-card ${cc}">
+      <div class="mm-card-header">
+        <div class="mm-badge">${initials}</div>
+        <div><h3>${mm.name}</h3><p>Holding at Store &nbsp;|&nbsp; ${mm.stores.length} sites</p></div>
+      </div>
+      <div class="mm-card-body">
+        <table class="mm-table">
+          <thead><tr><th>Code</th><th>Site Name</th><th>Small</th><th>Big</th><th>Ins.</th><th>Total</th></tr></thead>
+          <tbody>${storeRows}</tbody>
+          <tfoot><tr>
+            <td colspan="2"><strong>TOTAL</strong></td>
+            <td><strong>${mm.totalSmall.toLocaleString('en-IN')}</strong></td>
+            <td><strong>${mm.totalBig.toLocaleString('en-IN')}</strong></td>
+            <td><strong>${mm.totalPuff.toLocaleString('en-IN')}</strong></td>
+            <td><strong>${mm.grandTotal.toLocaleString('en-IN')}</strong></td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="section"><span class="section-title">Market Manager Wise Breakdown</span></div>
+  <div class="mm-grid">${cards}</div>`;
+}
+
+function generatePreview(mmGroups, totals, reportDate, sheetTitle) {
+  const dateObj  = parseDate(reportDate);
+  const dayName  = dateObj ? dateObj.toLocaleDateString('en-US',{weekday:'long'}).toUpperCase() : '';
+  const genTime  = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  const ffdc     = formatFfdcText(sheetTitle);
+
+  return `
+    <div class="rpt-header">
+      <div class="header-icon"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+      <div class="header-text">
+        <div class="subtitle"><span class="ffdc-label">${ffdc}</span> · Stores Holding Report</div>
+        <h1>MM <span>WISE</span> HOLDING OF CRATES AT STORE</h1>
+        <div class="tagline">Request MM to return all empty crates to FFDC &nbsp;·&nbsp; Generated at ${genTime}</div>
+      </div>
+    </div>
+    <div class="kpi-bar">
+      <div class="kpi-date"><div class="label">Date</div><div class="date-val">${reportDate}</div><div class="day">${dayName}</div></div>
+      <div class="kpi-item kpi-blue">
+        <div class="kpi-icon"><img src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/c21hbGxjcmF0ZV93bTVxcmc=/template_primary" alt="Small Crate"></div>
+        <div class="kpi-info"><div class="cap">Total<br>Small Crates</div><div class="val">${totals.totalSmall.toLocaleString('en-IN')}</div></div>
+      </div>
+      <div class="kpi-item kpi-green">
+        <div class="kpi-icon"><img src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/YmlnY3JhdGVfb2U2cmxq/template_primary" alt="Big Crate"></div>
+        <div class="kpi-info"><div class="cap">Total<br>Big Crates</div><div class="val">${totals.totalBig.toLocaleString('en-IN')}</div></div>
+      </div>
+      <div class="kpi-item kpi-orange">
+        <div class="kpi-icon"><img src="https://res-console.cloudinary.com/djqfcheof/thumbnails/transform/v1/image/upload/Y19maWxsLGhfMjAwLHdfMjAw/v1/aW5zdWxhdGVkYm94X2dkbGNxYw==/template_primary" alt="Insulated Box"></div>
+        <div class="kpi-info"><div class="cap">Total<br>Insulated Box</div><div class="val">${totals.totalPuff.toLocaleString('en-IN')}</div></div>
+      </div>
+      <div class="kpi-item kpi-navy">
+        <div class="kpi-icon"></div>
+        <div class="kpi-info"><div class="cap">Grand<br>Total</div><div class="val">${totals.grandTotal.toLocaleString('en-IN')}</div></div>
+      </div>
+    </div>
+    ${generateSummary(mmGroups, totals)}
+    ${generateMMTables(mmGroups)}
+    <div class="request-section">
+      <div class="request-title">Request to Market Managers</div>
+      <div class="request-items">
+        <div class="req-item"><div class="req-icon"><svg viewBox="0 0 24 24"><path d="M3 10h12v5H3z" fill="#003366"/><path d="M6 15h2v2H6zM12 15h2v2h-2z" fill="#fff"/><path d="M5 10l2-4h8l2 4" fill="none" stroke="#003366" stroke-width="1.5"/></svg></div><p>Ensure FNV Vehicle Arrival Information</p></div>
+        <div class="req-item"><div class="req-icon"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="#1B7A3E"/><path d="M3 9h18M7 5v14M12 5v14M17 5v14" stroke="#fff" stroke-width="1.5"/></svg></div><p>Return all empty crates to FFDC immediately</p></div>
+        <div class="req-item"><div class="req-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#E07B00"/><circle cx="12" cy="12" r="5" fill="#fff"/><path d="M12 7v5l3 3" stroke="#E07B00" stroke-width="1.8" stroke-linecap="round"/></svg></div><p>Avoid Holding at Store. Load Immediately</p></div>
+        <div class="req-item"><div class="req-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="#003366"/><circle cx="12" cy="12" r="4" fill="#fff"/><path d="M12 4v4M20 12h-4M12 20v-4M4 12h4" stroke="#003366" stroke-width="1.5"/></svg></div><p>Improve Turnaround and Reduce Holding</p></div>
+      </div>
+    </div>
+    <div class="rpt-footer">
+      <div class="footer-left">
+        <img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M4%205h16a2%202%200%20012%202v10a2%202%200%2001-2%202H6l-4%204V7a2%202%200%20012-2z'%20fill='%2325D366'/%3E%3Cpath%20d='M7%209h10M7%2013h6'%20stroke='%23ffffff'%20stroke-width='2'%20stroke-linecap='round'/%3E%3C/svg%3E" alt="Support icon">
+        <div><p>KINDLY REQUEST TO RETURN ALL EMPTY CRATES TO FFDC</p><span>For any queries, contact FFDC Support Team.</span></div>
+      </div>
+      <div class="footer-right"><p><img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Crect%20x='3'%20y='5'%20width='18'%20height='14'%20rx='2'%20fill='%23ffffff'/%3E%3Cpath%20d='M3%207l9%206%209-6'%20fill='none'%20stroke='%23003366'%20stroke-width='2'/%3E%3C/svg%3E" alt="Email icon">FFDC SUPPORT TEAM</p><span>${ffdc}</span></div>
+    </div>`;
+}
+
+/* ================================================================
+   MAIN PROCESS
+================================================================ */
+async function processFile() {
+  const file = window._uploadedFile;
+  if (!file) return;
+  show('loadingScreen');
+  const msgs = ['Parsing Excel data…','Grouping by Market Manager…','Sorting stores by total…','Building report preview…'];
+  let mi = 0;
+  const msgEl    = document.getElementById('loadingMsg');
+  const msgTimer = setInterval(()=>{ msgEl.textContent = msgs[mi++ % msgs.length]; }, 700);
+  try {
+    const { rows, sheetName } = await parseExcel(file);
+    const mmGroups   = groupByMM(rows);
+    if (!mmGroups.length) throw new Error('No MM data found. Check your Excel format.');
+    const totals     = calculateTotals(mmGroups);
+    const reportDate = extractDate(rows, sheetName);
+    const sheetTitle = rows[0] ? String(rows[0][0]||'') : '';
+    parsedData = { mmGroups, totals, reportDate, sheetTitle };
+    document.getElementById('reportContent').innerHTML = generatePreview(mmGroups, totals, reportDate, sheetTitle);
+    clearInterval(msgTimer);
+    show('reportScreen');
+  } catch(err) {
+    clearInterval(msgTimer);
+    show('uploadScreen');
+    const e = document.getElementById('errorMsg');
+    e.textContent = 'Error: '+err.message; e.style.display = 'block';
+  }
+}
+
+/* ================================================================
+   PDF GENERATION — one full-width page per section (no squishing)
+================================================================ */
+async function generatePDF() {
+  if (!parsedData) return;
+  const btn      = document.getElementById('pdfBtn');
+  const prog     = document.getElementById('pdfProgress');
+  const fill     = document.getElementById('progFill');
+  const progText = document.getElementById('pdfProgressText');
+
+  btn.disabled = true;
+  prog.classList.add('active');
+  progText.textContent = 'Capturing report…';
+  fill.style.width = '5%';
+
+  const { mmGroups, totals, reportDate, sheetTitle } = parsedData;
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf    = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const PW     = 210, PH = 297;
+    const MARGIN = 8;
+    const CW     = PW - MARGIN * 2;
+    const FOOTER_H = 10;
+    const HEADER_H = 14; // mini repeat header on continuation pages
+    let pageNum  = 1;
+
+    // ------ helpers ------
+    function setPage(n) { pdf.setPage(n); }
+
+    function drawMiniHeader(y) {
+      pdf.setFillColor(0,51,102);
+      pdf.rect(MARGIN, y, CW, HEADER_H, 'F');
+      pdf.setTextColor(255,255,255);
+      pdf.setFontSize(9); pdf.setFont(undefined,'bold');
+      pdf.text('MM WISE HOLDING OF CRATES AT STORE', MARGIN+4, y+6);
+      pdf.setFontSize(7); pdf.setFont(undefined,'normal');
+      pdf.text(`Date: ${reportDate}  |  Generated: ${new Date().toLocaleString('en-IN')}`, MARGIN+4, y+11);
+    }
+
+    function drawFooter(pn, total) {
+      pdf.setFillColor(0,51,102);
+      pdf.rect(MARGIN, PH-MARGIN-FOOTER_H+1, CW, FOOTER_H, 'F');
+      pdf.setTextColor(255,255,255);
+      pdf.setFontSize(7); pdf.setFont(undefined,'normal');
+      pdf.text(`Page ${pn} of ${total}`, MARGIN+3, PH-MARGIN-2);
+      pdf.text('Generated by Store Crates Reporting System', PW/2, PH-MARGIN-2, {align:'center'});
+      pdf.text(reportDate, PW-MARGIN-3, PH-MARGIN-2, {align:'right'});
+    }
+
+    // We render the ENTIRE reportContent element as one tall canvas,
+    // then slice it into A4 pages at natural break points (avoiding mid-row cuts).
+    // Key: we render at width = 1200px (matches A4 proportional content width)
+    const reportEl = document.getElementById('reportContent');
+    const RENDER_W = 1200;
+
+    fill.style.width = '10%';
+    const canvas = await html2canvas(reportEl, {
+      scale       : 2,
+      useCORS     : true,
+      logging     : false,
+      backgroundColor: '#ffffff',
+      width       : RENDER_W,
+      windowWidth : RENDER_W,
+      onclone     : (doc) => {
+        const el = doc.getElementById('reportContent');
+        el.style.borderRadius = '0';
+        el.style.boxShadow    = 'none';
+        el.style.width        = RENDER_W + 'px';
+        el.style.maxWidth     = 'none';
+        // Force 2-col mm-grid inside clone
+        const grid = el.querySelector('.mm-grid');
+        if (grid) { grid.style.gridTemplateColumns = '1fr 1fr'; }
+      }
+    });
+
+    fill.style.width = '55%';
+    progText.textContent = 'Building PDF pages…';
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.96);
+
+    // Total rendered image height in mm (content width = CW mm)
+    const scale  = CW / (canvas.width / 2); // canvas is @2x
+    const totalH = (canvas.height / 2) * scale; // in mm
+
+    const USABLE_H = PH - MARGIN * 2 - FOOTER_H - HEADER_H - 2; // usable slice per page
+
+    let slicedY  = 0; // in mm, position within totalH already placed
+    let isFirst  = true;
+    const pages  = [];
+
+    while (slicedY < totalH - 0.5) {
+      const sliceH = Math.min(USABLE_H, totalH - slicedY);
+
+      // srcY and srcH in original canvas pixels (@2x)
+      const pxPerMm = (canvas.height / 2) / totalH;
+      const srcX    = 0;
+      const srcY    = Math.round(slicedY * pxPerMm) * 2; // back to @2x
+      const srcW    = canvas.width;
+      const srcH    = Math.round(sliceH * pxPerMm) * 2;
+
+      if (!isFirst) { pdf.addPage(); pageNum++; }
+      isFirst = false;
+
+      const topY = MARGIN;
+      drawMiniHeader(topY);
+      const imgY = topY + HEADER_H + 1;
+
+      // Create a sub-canvas for this slice
+      const slice = document.createElement('canvas');
+      slice.width  = srcW;
+      slice.height = Math.min(srcH, canvas.height - srcY);
+      const ctx = slice.getContext('2d');
+      ctx.drawImage(canvas, srcX, srcY, srcW, slice.height, 0, 0, srcW, slice.height);
+
+      const sliceImg  = slice.toDataURL('image/jpeg', 0.96);
+      const sliceHmm  = (slice.height / 2) * scale;
+
+      pdf.addImage(sliceImg, 'JPEG', MARGIN, imgY, CW, sliceHmm);
+
+      pages.push(pageNum);
+      slicedY += sliceH;
+    }
+
+    fill.style.width = '90%';
+    progText.textContent = 'Adding footers…';
+
+    const totalPages = pageNum;
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p);
+      drawFooter(p, totalPages);
+    }
+
+    fill.style.width = '100%';
+    pdf.save(`MM_Wise_Crates_${reportDate.replace(/\./g,'-')}.pdf`);
+
+  } catch(err) {
+    alert('PDF generation failed: ' + err.message);
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  prog.classList.remove('active');
+  fill.style.width = '0%';
+}
+
+/* ================================================================
+   OUTLOOK EMAIL — inline screenshots of each "page" section
+================================================================ */
+async function sendOutlookEmail() {
+  if (!parsedData) return;
+
+  const overlay  = document.getElementById('emailOverlay');
+  const status   = document.getElementById('emailStatus');
+  const emailBtn = document.getElementById('emailBtn');
+
+  overlay.classList.add('active');
+  emailBtn.disabled = true;
+
+  const { reportDate, sheetTitle, mmGroups, totals } = parsedData;
+  const ffdc = formatFfdcText(sheetTitle);
+
+  try {
+    // ---- Section element to screenshot ----
+    const reportEl = document.getElementById('reportContent');
+
+    status.textContent = 'Capturing full report image…';
+
+    const fullCanvas = await html2canvas(reportEl, {
+      scale: 1.5,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: 1100,
+      onclone: doc => {
+        const el = doc.getElementById('reportContent');
+        el.style.borderRadius = '0';
+        el.style.boxShadow    = 'none';
+        el.style.width        = '1100px';
+        el.style.maxWidth     = 'none';
+        const grid = el.querySelector('.mm-grid');
+        if (grid) grid.style.gridTemplateColumns = '1fr 1fr';
+      }
+    });
+
+    status.textContent = 'Building email content…';
+
+    const imageSrc = fullCanvas.toDataURL('image/png');
+
+    const subject = encodeURIComponent(
+      `MM Wise Holding of Crates at Store – ${reportDate} | Grand Total: ${totals.grandTotal.toLocaleString('en-IN')} | ${ffdc}`
+    );
+
+    const bodyLines = [
+      `MM WISE HOLDING OF CRATES AT STORE`,
+      `Date: ${reportDate}  |  ${ffdc}`,
+      `Generated: ${new Date().toLocaleString('en-IN')}`,
+      ``,
+      `A visual report image has been prepared in the helper window. Copy the image from there and paste it directly into your Outlook email body.`,
+      ``,
+      `Total Small Crates : ${totals.totalSmall.toLocaleString('en-IN')}`,
+      `Total Big Crates   : ${totals.totalBig.toLocaleString('en-IN')}`,
+      `Total Insulated Box: ${totals.totalPuff.toLocaleString('en-IN')}`,
+      `Grand Total        : ${totals.grandTotal.toLocaleString('en-IN')}`,
+      ``,
+      `MM Wise summary is included as an inline image in the helper window below.`,
+      ``
+    ];
+
+    const mailtoBody = encodeURIComponent(bodyLines.join('\n'));
+    const mailtoLink = `mailto:?subject=${subject}&body=${mailtoBody}`;
+
+    status.textContent = 'Opening Outlook and helper window…';
+    window.location.href = mailtoLink;
+
+    await new Promise(r => setTimeout(r, 1200));
+
+    const emailHTML = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>MM Wise Crates Report – ${reportDate}</title>
+<style>
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#EEF2F7;margin:0;padding:20px}
+  .container{max-width:700px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.12)}
+  .top-bar{background:#003366;color:white;padding:16px 24px;font-size:16px;font-weight:700}
+  .top-bar span{color:#F59E0B}
+  .meta{background:#1E3A5F;color:rgba(255,255,255,.8);padding:8px 24px;font-size:12px}
+  .images{padding:16px 24px}
+  .copy-hint{background:#FFF8E1;border:1px solid #F59E0B;border-radius:8px;padding:14px 18px;margin:16px 24px;font-size:13px;color:#78350F}
+  .copy-hint strong{display:block;margin-bottom:4px;font-size:14px}
+  .footer-bar{background:#003366;color:rgba(255,255,255,.7);padding:12px 24px;font-size:11px;text-align:center}
+  img{width:100%;height:auto;display:block;border:1px solid #E2E8F0;border-radius:8px}
+</style>
+</head><body>
+<div class="container">
+  <div class="top-bar">MM <span>WISE</span> HOLDING OF CRATES AT STORE</div>
+  <div class="meta">Date: ${reportDate} &nbsp;|&nbsp; ${ffdc} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-IN')}</div>
+  <div class="images"><img src="${imageSrc}" alt="MM Wise Crates Holding Report"></div>
+  <div class="footer-bar">MM Wise Crates Holding Report &nbsp;·&nbsp; ${ffdc} &nbsp;·&nbsp; ${reportDate}</div>
+</div>
+</body></html>`;
+
+    const blob = new Blob([emailHTML], { type:'text/html' });
+    const blobURL = URL.createObjectURL(blob);
+    const win = window.open(blobURL, '_blank', 'width=760,height=850,scrollbars=yes,toolbar=no,menubar=no');
+    if (!win) {
+      alert('Popup blocked! Please allow popups for this page, then try again. Outlook has been opened with the text summary. The visual report helper window could not be opened.');
+    }
+
+  } catch(err) {
+    alert('Email preparation failed: ' + err.message);
+    console.error(err);
+  }
+
+  overlay.classList.remove('active');
+  emailBtn.disabled = false;
+}
+
+/* ================================================================
+   UTILITIES
+================================================================ */
+function show(id) {
+  ['uploadScreen','loadingScreen','reportScreen'].forEach(s => {
+    const el = document.getElementById(s);
+    if (s === id) {
+      el.style.display = (s==='loadingScreen'||s==='uploadScreen') ? 'flex' : 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+
+function resetApp() {
+  show('uploadScreen');
+  document.getElementById('fileInput').value = '';
+  document.getElementById('selectedFile').style.display = 'none';
+  document.getElementById('generateBtn').disabled = true;
+  document.getElementById('errorMsg').style.display = 'none';
+  parsedData = null;
+  window._uploadedFile = null;
+}
+</script>
+</body>
+</html>
