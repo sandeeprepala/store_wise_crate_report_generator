@@ -103,8 +103,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .summary-table tbody tr:hover{background:var(--gray-100)}
 .summary-table tbody td{padding:11px 16px}
 .summary-table tbody td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
-.summary-table tfoot tr{background:var(--navy)}
-.summary-table tfoot td{padding:12px 16px;color:white;font-weight:700;font-size:14px}
+.summary-table tfoot tr{border-top:1px solid var(--gray-200)}
+.summary-table tfoot td{padding:12px 16px;color:var(--text);font-weight:700;font-size:14px}
 .summary-table tfoot td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
 
 /* ===== MM GRID ===== */
@@ -130,7 +130,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .mm-table thead tr.date-header th.col-label{background:#1E3A5F;color:white}
 .mm-table thead tr.date-header th.date-group{color:white;border-left:2px solid rgba(255,255,255,.3)}
 
-/* Sub-header row (Sm/Bg/Ins/Tot per date) */
+/* Sub-header row */
 .mm-table thead tr.col-header th{
   background:#2D4A6E;color:rgba(255,255,255,.9);
   padding:7px 8px;font-size:10px;font-weight:600;letter-spacing:.3px;
@@ -157,14 +157,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .mm-table tfoot td.num{text-align:right}
 .mm-table tfoot td.date-sep-cell{border-left:2px solid var(--gray-300)}
 
-/* Date group color bands on date-header */
+/* Date group color bands */
 .dg-0{background:#003366}.dg-1{background:#1B5E20}.dg-2{background:#E65100}
 .dg-3{background:#4A148C}.dg-4{background:#880E4F}.dg-5{background:#006064}
-
-/* Subtle alternating tint on body cells by date group */
-.mm-table tbody td.dg-bg-1{background-color:rgba(27,94,32,.04)}
-.mm-table tbody td.dg-bg-2{background-color:rgba(230,81,0,.04)}
-.mm-table tbody td.dg-bg-3{background-color:rgba(74,20,140,.04)}
 
 /* MM card color themes */
 .mm-c0 .mm-card-header{background:linear-gradient(135deg,#003366,#005BAC)}
@@ -314,7 +309,6 @@ function handleFile(file) {
   const sel = document.getElementById('selectedFile');
   const btn = document.getElementById('generateBtn');
   err.style.display = 'none';
-  // Clear any previous parsed report to avoid showing stale data
   parsedData = null;
   document.getElementById('reportContent').innerHTML = '';
   if (!file) return;
@@ -356,24 +350,38 @@ function normalizeDateValue(value) {
   if (!value && value !== 0) return '';
   const raw = String(value).trim();
   if (!raw) return '';
-  // DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
   const dmMatch = raw.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2,4})$/);
   if (dmMatch) {
     const year = dmMatch[3].length === 2 ? `20${dmMatch[3]}` : dmMatch[3];
     return `${String(dmMatch[1]).padStart(2,'0')}.${String(dmMatch[2]).padStart(2,'0')}.${year}`;
   }
-  // YYYY-MM-DD
   const isoMatch = raw.match(/^(\d{4})[.\/\-](\d{1,2})[.\/\-](\d{1,2})$/);
   if (isoMatch) return `${String(isoMatch[3]).padStart(2,'0')}.${String(isoMatch[2]).padStart(2,'0')}.${isoMatch[1]}`;
-  // Already formatted dates from Excel cellDates:true (like "6/8/2026")
   const usMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (usMatch) return `${String(usMatch[2]).padStart(2,'0')}.${String(usMatch[1]).padStart(2,'0')}.${usMatch[3]}`;
-  // Try generic parse
   const parsed = new Date(raw);
   if (!isNaN(parsed) && parsed.getFullYear() > 2000) {
     return `${String(parsed.getDate()).padStart(2,'0')}.${String(parsed.getMonth()+1).padStart(2,'0')}.${parsed.getFullYear()}`;
   }
   return '';
+}
+
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#','');
+  const bigint = parseInt(h.length === 3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/* ── NEW: build the 3-level shade set for a date-group color ── */
+function dateGroupShades(hex) {
+  return {
+    normal:  hexToRgba('#FFFFFF', 0.10),   /* regular rows  */
+    first:   hexToRgba(hex, 0.10),   /* first data row — lightened shade */
+    total:   hexToRgba(hex, 0.04),   /* grand-total footer — lighter shade */
+  };
 }
 
 function isPossibleDate(value) {
@@ -419,18 +427,9 @@ function formatDateRange(groups) {
 }
 
 /* ================================================================
-   EXCEL PARSING — detect column-based date layout
-   
-   Layout from the image:
-   Row 0: [managerName?, ..., DATE1, ..., DATE2, ..., DATE3, ...]
-   Row 1: [storeCode?,  ..., SM, PF, BG, SM, PF, BG, SM, PF, BG, ...]
-   Row 2+: data rows
-
-   OR the simpler single-date format (original).
+   EXCEL PARSING
 ================================================================ */
-
 function detectMultiDateLayout(rows) {
-  // Look in first 3 rows for 2+ date-like values in the same row
   for (let r = 0; r < Math.min(3, rows.length); r++) {
     const row = rows[r] || [];
     const dateCells = row.filter(c => isPossibleDate(c));
@@ -439,14 +438,7 @@ function detectMultiDateLayout(rows) {
   return false;
 }
 
-/**
- * Parse multi-date column layout:
- *   header row: col0=manager/blank, col1=storeCode/blank, col2=storeName/blank, then date groups
- *   sub-header row: type labels (Small/Big/Puff etc.) per date group
- *   data rows: per store
- */
 function parseMultiDateColumns(rows) {
-  // Find the row with 2+ dates
   let dateHeaderRow = -1;
   for (let r = 0; r < Math.min(5, rows.length); r++) {
     const row = rows[r] || [];
@@ -455,9 +447,6 @@ function parseMultiDateColumns(rows) {
   if (dateHeaderRow === -1) return null;
 
   const headerRow = rows[dateHeaderRow] || [];
-
-  // Build date blocks: find which columns each date spans
-  // A date cell starts a new group; it spans until the next date cell
   const dateBlocks = [];
   for (let col = 0; col < headerRow.length; col++) {
     const d = normalizeDateValue(headerRow[col]);
@@ -468,21 +457,12 @@ function parseMultiDateColumns(rows) {
   }
   if (!dateBlocks.length) return null;
 
-  // Determine fixed left columns (manager, store code, store name)
-  // These are the cols before the first date block
   const firstDateCol = dateBlocks[0].startCol;
-  // Typical: col0=manager, col1=storeCode, col2=storeName  OR  no fixed cols if dates start at col0
-  // We'll detect by looking at data rows
-  const LEFT_COLS = firstDateCol; // 0, 1, 2, or 3
-
-  // Sub-header row (type labels)
+  const LEFT_COLS = firstDateCol;
   const subHeaderRow = rows[dateHeaderRow + 1] || [];
 
-  // For each date block, detect which sub-columns are Small/Puff/Big
-  // by reading the sub-header labels
   dateBlocks.forEach(block => {
     block.cols = { small: block.startCol, puff: block.startCol + 1, big: block.startCol + 2 };
-    // Try to detect from sub-header
     for (let c = block.startCol; c <= block.endCol && c < subHeaderRow.length; c++) {
       const lbl = String(subHeaderRow[c] || '').toLowerCase();
       if (/small|sm/i.test(lbl)) block.cols.small = c;
@@ -491,14 +471,8 @@ function parseMultiDateColumns(rows) {
     }
   });
 
-  // Detect data start row
   let dataStart = dateHeaderRow + 2;
-  // If sub-header looks like labels (non-numeric), skip it
-  // Otherwise data might start at dateHeaderRow+1
-
-  // Parse data rows — build per-date MM structures
-  const dateMMMap = new Map(); // date -> Map(mmName -> {name, stores})
-
+  const dateMMMap = new Map();
   dateBlocks.forEach(b => {
     if (!dateMMMap.has(b.reportDate)) dateMMMap.set(b.reportDate, new Map());
   });
@@ -509,34 +483,23 @@ function parseMultiDateColumns(rows) {
     const row = rows[r];
     if (!row || row.every(c => c === null || c === '')) continue;
 
-    // Read fixed left columns
     const col0 = row[0] != null ? String(row[0]).trim() : '';
     const col1 = LEFT_COLS > 1 && row[1] != null ? String(row[1]).trim() : '';
     const col2 = LEFT_COLS > 2 && row[2] != null ? String(row[2]).trim() : '';
 
     let storeCode = '', storeName = '', managerCol = '';
 
-    if (LEFT_COLS === 0) {
-      // No fixed cols — shouldn't happen for this format
-      continue;
-    } else if (LEFT_COLS === 1) {
-      storeCode = col0;
-    } else if (LEFT_COLS === 2) {
-      managerCol = col0; storeCode = col1;
-    } else {
-      managerCol = col0; storeCode = col1; storeName = col2;
-    }
+    if (LEFT_COLS === 0) continue;
+    else if (LEFT_COLS === 1) { storeCode = col0; }
+    else if (LEFT_COLS === 2) { managerCol = col0; storeCode = col1; }
+    else { managerCol = col0; storeCode = col1; storeName = col2; }
 
-    // Update manager
     if (managerCol) currentManager = managerCol;
-
-    // Skip total rows
     if (/total/i.test(col0) && !storeCode) continue;
     if (!storeCode && !storeName) continue;
 
     const mmName = currentManager || 'Unknown';
 
-    // For each date block, read values
     dateBlocks.forEach(block => {
       const small = toNum(row[block.cols.small]);
       const puff  = toNum(row[block.cols.puff]);
@@ -546,7 +509,6 @@ function parseMultiDateColumns(rows) {
       if (!mmMap.has(mmName)) mmMap.set(mmName, { name: mmName, stores: [] });
       const mm = mmMap.get(mmName);
 
-      // Check if store already exists (same code) — update
       const existing = mm.stores.find(s => s.code === storeCode && s.name === storeName);
       if (existing) {
         existing.small += small; existing.puff += puff; existing.big += big;
@@ -557,7 +519,6 @@ function parseMultiDateColumns(rows) {
     });
   }
 
-  // Build final dateGroups array
   const dateGroups = dateBlocks.map(block => {
     const mmMap = dateMMMap.get(block.reportDate);
     const mmGroups = Array.from(mmMap.values());
@@ -574,7 +535,6 @@ function parseMultiDateColumns(rows) {
   return sortDateGroups(dateGroups.filter(g => g.mmGroups.length > 0));
 }
 
-/* Original single-date MM parser (unchanged) */
 function groupByMM(rows) {
   const groups = [];
   let currentMM = null;
@@ -621,7 +581,6 @@ function extractDate(rows, sheetName) {
   return new Date().toLocaleDateString('en-IN');
 }
 
-/* Master dispatcher */
 function groupByDateAndMM(rows, sheetName) {
   if (detectMultiDateLayout(rows)) {
     const result = parseMultiDateColumns(rows);
@@ -636,14 +595,22 @@ function groupByDateAndMM(rows, sheetName) {
    HTML GENERATORS
 ================================================================ */
 function generateSummary(mmGroups, totals) {
-  const rows = mmGroups.map(mm => `
+  const BASE_COLORS = ['#003366','#1B5E20','#E65100','#4A148C','#880E4F','#006064'];
+  
+  const rows = mmGroups.map((mm, idx) => {
+    const color = BASE_COLORS[idx % 6];
+    const bg = hexToRgba(color, 0.07);
+    return `
     <tr>
-      <td>${mm.name}</td>
-      <td>${mm.totalSmall.toLocaleString('en-IN')}</td>
-      <td>${mm.totalBig.toLocaleString('en-IN')}</td>
-      <td>${mm.totalPuff.toLocaleString('en-IN')}</td>
-      <td><strong>${mm.grandTotal.toLocaleString('en-IN')}</strong></td>
-    </tr>`).join('');
+      <td style="background-color:${bg}">${mm.name}</td>
+      <td style="background-color:${bg}">${mm.totalSmall.toLocaleString('en-IN')}</td>
+      <td style="background-color:${bg}">${mm.totalBig.toLocaleString('en-IN')}</td>
+      <td style="background-color:${bg}">${mm.totalPuff.toLocaleString('en-IN')}</td>
+      <td style="background-color:${bg}"><strong>${mm.grandTotal.toLocaleString('en-IN')}</strong></td>
+    </tr>`;
+  }).join('');
+  
+  const footerBg = 'rgba(0,51,102,0.04)';
   return `
   <div class="section">
     <span class="section-title">MM Wise Holding Summary</span>
@@ -651,53 +618,58 @@ function generateSummary(mmGroups, totals) {
       <thead><tr><th>MM Wise</th><th>Small Crates</th><th>Big Crates</th><th>Insulated Box</th><th>Grand Total</th></tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr>
-        <td><strong>GRAND TOTAL</strong></td>
-        <td>${totals.totalSmall.toLocaleString('en-IN')}</td>
-        <td>${totals.totalBig.toLocaleString('en-IN')}</td>
-        <td>${totals.totalPuff.toLocaleString('en-IN')}</td>
-        <td>${totals.grandTotal.toLocaleString('en-IN')}</td>
+        <td style="background-color:${footerBg}"><strong>GRAND TOTAL</strong></td>
+        <td style="background-color:${footerBg}">${totals.totalSmall.toLocaleString('en-IN')}</td>
+        <td style="background-color:${footerBg}">${totals.totalBig.toLocaleString('en-IN')}</td>
+        <td style="background-color:${footerBg}">${totals.totalPuff.toLocaleString('en-IN')}</td>
+        <td style="background-color:${footerBg}">${totals.grandTotal.toLocaleString('en-IN')}</td>
       </tr></tfoot>
     </table>
   </div>`;
 }
 
-/* ================================================================
-   MULTI-DATE SUMMARY — one row per MM, columns per date
-================================================================ */
 function generateMultiDateSummary(dateGroups) {
-  // Collect all MM names across all dates
   const allMMs = [];
   dateGroups.forEach(g => g.mmGroups.forEach(mm => { if (!allMMs.includes(mm.name)) allMMs.push(mm.name); }));
 
-  const dateHeaders = dateGroups.map((g, i) =>
-    `<th colspan="4" style="background:${['#003366','#1B5E20','#E65100','#4A148C','#880E4F','#006064'][i%6]};color:white;text-align:center;padding:8px;font-size:11px;letter-spacing:.8px">${g.reportDate}</th>`
-  ).join('');
+  const baseColors = ['#003366','#1B5E20','#E65100','#4A148C','#880E4F','#006064'];
 
-  const subHeaders = dateGroups.map(() =>
-    `<th style="text-align:right;padding:8px 10px;background:#1E3A5F;color:rgba(255,255,255,.9);font-size:10px">Small</th>
-     <th style="text-align:right;padding:8px 10px;background:#1E3A5F;color:rgba(255,255,255,.9);font-size:10px">Big</th>
-     <th style="text-align:right;padding:8px 10px;background:#1E3A5F;color:rgba(255,255,255,.9);font-size:10px">Ins.</th>
-     <th style="text-align:right;padding:8px 10px;background:#1E3A5F;color:rgba(255,255,255,.9);font-size:10px;font-weight:800">Total</th>`
-  ).join('');
+  const dateHeaders = dateGroups.map((g, i) => {
+    const headerColor = baseColors[i%6];
+    return `<th colspan="4" style="background:${headerColor};color:white;text-align:center;padding:8px;font-size:11px;letter-spacing:.8px">${g.reportDate}</th>`;
+  }).join('');
+
+  const subHeaders = dateGroups.map((g, i) => {
+    const headerColor = baseColors[i%6];
+    const lightHeader = hexToRgba(headerColor, 0.75);
+    return `<th style="text-align:right;padding:8px 10px;background:${lightHeader};color:white;font-size:10px">Small</th>
+     <th style="text-align:right;padding:8px 10px;background:${lightHeader};color:white;font-size:10px">Big</th>
+     <th style="text-align:right;padding:8px 10px;background:${lightHeader};color:white;font-size:10px">Ins.</th>
+     <th style="text-align:right;padding:8px 10px;background:${lightHeader};color:white;font-size:10px;font-weight:800">Total</th>`;
+  }).join('');
 
   const bodyRows = allMMs.map(mmName => {
-    const cells = dateGroups.map(g => {
+    const cells = dateGroups.map((g, di) => {
       const mm = g.mmGroups.find(m => m.name === mmName);
-      if (!mm) return `<td style="text-align:right;color:#CBD5E1">–</td><td style="text-align:right;color:#CBD5E1">–</td><td style="text-align:right;color:#CBD5E1">–</td><td style="text-align:right;color:#CBD5E1">–</td>`;
-      return `<td style="text-align:right">${mm.totalSmall.toLocaleString('en-IN')}</td>
-              <td style="text-align:right">${mm.totalBig.toLocaleString('en-IN')}</td>
-              <td style="text-align:right">${mm.totalPuff.toLocaleString('en-IN')}</td>
-              <td style="text-align:right;font-weight:700">${mm.grandTotal.toLocaleString('en-IN')}</td>`;
+      const headerColor = baseColors[di%6];
+      const light = hexToRgba(headerColor, 0.07);
+      if (!mm) return `<td style="text-align:right;color:#CBD5E1;background-color:${light}">–</td><td style="text-align:right;color:#CBD5E1;background-color:${light}">–</td><td style="text-align:right;color:#CBD5E1;background-color:${light}">–</td><td style="text-align:right;color:#CBD5E1;background-color:${light}">–</td>`;
+      return `<td style="text-align:right;background-color:${light}">${mm.totalSmall.toLocaleString('en-IN')}</td>
+              <td style="text-align:right;background-color:${light}">${mm.totalBig.toLocaleString('en-IN')}</td>
+              <td style="text-align:right;background-color:${light}">${mm.totalPuff.toLocaleString('en-IN')}</td>
+              <td style="text-align:right;font-weight:700;background-color:${light}">${mm.grandTotal.toLocaleString('en-IN')}</td>`;
     }).join('');
     return `<tr><td style="padding:10px 14px;font-weight:600">${mmName}</td>${cells}</tr>`;
   }).join('');
 
-  const footerCells = dateGroups.map(g => {
+  const footerCells = dateGroups.map((g, di) => {
     const t = g.totals;
-    return `<td style="text-align:right;padding:11px 10px">${t.totalSmall.toLocaleString('en-IN')}</td>
-            <td style="text-align:right;padding:11px 10px">${t.totalBig.toLocaleString('en-IN')}</td>
-            <td style="text-align:right;padding:11px 10px">${t.totalPuff.toLocaleString('en-IN')}</td>
-            <td style="text-align:right;padding:11px 10px;font-weight:800">${t.grandTotal.toLocaleString('en-IN')}</td>`;
+    const headerColor = baseColors[di%6];
+    const light = hexToRgba(headerColor, 0.04);
+    return `<td style="text-align:right;padding:11px 10px;background-color:${light}">${t.totalSmall.toLocaleString('en-IN')}</td>
+            <td style="text-align:right;padding:11px 10px;background-color:${light}">${t.totalBig.toLocaleString('en-IN')}</td>
+            <td style="text-align:right;padding:11px 10px;background-color:${light}">${t.totalPuff.toLocaleString('en-IN')}</td>
+            <td style="text-align:right;padding:11px 10px;font-weight:800;background-color:${light}">${t.grandTotal.toLocaleString('en-IN')}</td>`;
   }).join('');
 
   return `
@@ -723,12 +695,14 @@ function generateMultiDateSummary(dateGroups) {
 }
 
 /* ================================================================
-   MM CARD TABLE — Multi-date columns appended side by side
+   MM CARD TABLE — Multi-date columns
 ================================================================ */
 function generateMMTables(dateGroups) {
   const isMultiDate = dateGroups.length > 1;
 
-  // Collect all MM names (from primary date first, then others)
+  /* The 6 header colors, one per date group */
+  const BASE_COLORS = ['#003366','#1B5E20','#E65100','#4A148C','#880E4F','#006064'];
+
   const allMMNames = [];
   dateGroups.forEach(g => g.mmGroups.forEach(mm => {
     if (!allMMNames.includes(mm.name)) allMMNames.push(mm.name);
@@ -738,9 +712,8 @@ function generateMMTables(dateGroups) {
     const cc = `mm-c${idx % 6}`;
     const initials = mmName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
-    // Gather all stores across all dates for this MM
     const allStoreCodes = [];
-    const storeNames = new Map(); // code -> name
+    const storeNames = new Map();
     dateGroups.forEach(g => {
       const mm = g.mmGroups.find(m => m.name === mmName);
       if (!mm) return;
@@ -751,7 +724,6 @@ function generateMMTables(dateGroups) {
       });
     });
 
-    // Sort stores by total of the latest (last) date that has this MM
     const latestMM = [...dateGroups].reverse().map(g => g.mmGroups.find(m => m.name === mmName)).find(Boolean);
     if (latestMM) {
       allStoreCodes.sort((a, b) => {
@@ -761,52 +733,48 @@ function generateMMTables(dateGroups) {
       });
     }
 
-    // Count total sites and dates present
     const datesPresent = dateGroups.filter(g => g.mmGroups.find(m => m.name === mmName)).length;
     const subtitleText = isMultiDate
       ? `${allStoreCodes.length} sites · ${datesPresent} date${datesPresent>1?'s':''}`
       : `Holding at Store · ${allStoreCodes.length} sites`;
 
-    /* ---- Build table ---- */
-    // Header row 1: "Code | Site Name" then per-date colspan
-    let th1 = `<th class="col-label" rowspan="2">Code</th><th class="col-label" rowspan="2">Site Name</th>`;
+    /* ---- thead ---- */
+    let th1 = `<th class="col-label" rowspan="2">Code</th><th class="col-label" rowspan="2">Store Name</th>`;
     if (isMultiDate) {
       dateGroups.forEach((g, di) => {
-        const hasMM = g.mmGroups.find(m => m.name === mmName);
         th1 += `<th colspan="4" class="date-group dg-${di%6}">${g.reportDate}</th>`;
       });
     }
 
-    // Header row 2: sub-columns per date (or single date)
     let th2 = '';
     if (isMultiDate) {
+      const baseColors = ['#003366','#1B5E20','#E65100','#4A148C','#880E4F','#006064'];
       dateGroups.forEach((g, di) => {
-        const sep = di === 0 ? 'date-sep' : 'date-sep';
-        th2 += `<th class="col-label-sub ${sep}">Sm</th><th class="col-label-sub">Bg</th><th class="col-label-sub">Ins</th><th class="col-label-sub total-sub">Tot</th>`;
+        const headerColor = baseColors[di%6];
+        const lightHeader = hexToRgba(headerColor, 0.74);
+        th2 += `<th class="col-label-sub date-sep" style="background:${lightHeader};color:white">Sm</th><th class="col-label-sub" style="background:${lightHeader};color:white">Bg</th><th class="col-label-sub" style="background:${lightHeader};color:white">Ins</th><th class="col-label-sub total-sub" style="background:${lightHeader};color:white">Tot</th>`;
       });
     } else {
       th2 = `<th class="col-label-sub">Small</th><th class="col-label-sub">Big</th><th class="col-label-sub">Ins.</th><th class="col-label-sub total-sub">Total</th>`;
     }
 
-    // Data rows
-    const bodyRows = allStoreCodes.map(key => {
+    /* ---- body rows ---- */
+    const bodyRows = allStoreCodes.map((key, si) => {
       const name = storeNames.get(key) || '';
       let dateCells = '';
 
       if (isMultiDate) {
         dateGroups.forEach((g, di) => {
-          const mm = g.mmGroups.find(m => m.name === mmName);
+          const mm    = g.mmGroups.find(m => m.name === mmName);
           const store = mm ? mm.stores.find(s => (s.code||s.name) === key) : null;
-          const sepClass = di === 0 ? 'date-sep-cell' : 'date-sep-cell';
-          const bgClass  = di > 0 ? ` dg-bg-${di%4}` : '';
           if (!store || store.total === 0) {
-            dateCells += `<td class="num ${sepClass}${bgClass}"><span class="dash">–</span></td><td class="num${bgClass}"><span class="dash">–</span></td><td class="num${bgClass}"><span class="dash">–</span></td><td class="num-total${bgClass}"><span class="dash">–</span></td>`;
+            dateCells += `<td class="num date-sep-cell"><span class="dash">–</span></td><td class="num"><span class="dash">–</span></td><td class="num"><span class="dash">–</span></td><td class="num-total"><span class="dash">–</span></td>`;
           } else {
-            dateCells += `<td class="num ${sepClass}${bgClass}">${fmt(store.small)}</td><td class="num${bgClass}">${fmt(store.big)}</td><td class="num${bgClass}">${fmt(store.puff)}</td><td class="num-total${bgClass}">${fmt(store.total)}</td>`;
+            dateCells += `<td class="num date-sep-cell">${fmt(store.small)}</td><td class="num">${fmt(store.big)}</td><td class="num">${fmt(store.puff)}</td><td class="num-total">${fmt(store.total)}</td>`;
           }
         });
       } else {
-        const mm = dateGroups[0].mmGroups.find(m => m.name === mmName);
+        const mm    = dateGroups[0].mmGroups.find(m => m.name === mmName);
         const store = mm ? mm.stores.find(s => (s.code||s.name) === key) : null;
         if (!store) {
           dateCells = `<td class="num"><span class="dash">–</span></td><td class="num"><span class="dash">–</span></td><td class="num"><span class="dash">–</span></td><td class="num-total"><span class="dash">–</span></td>`;
@@ -822,22 +790,25 @@ function generateMMTables(dateGroups) {
       </tr>`;
     }).join('');
 
-    // Footer row
+    /* ---- footer row ---- */
     let footerCells = '';
     if (isMultiDate) {
       dateGroups.forEach((g, di) => {
         const mm = g.mmGroups.find(m => m.name === mmName);
-        const sepClass = 'date-sep-cell';
+        const dateColor = BASE_COLORS[di % 6];
+        const bg = hexToRgba(dateColor, 0.74);
         if (!mm) {
-          footerCells += `<td class="num ${sepClass}">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td>`;
+          footerCells += `<td class="num date-sep-cell" style="background:${bg};color:white">–</td><td class="num" style="background:${bg};color:white">–</td><td class="num" style="background:${bg};color:white">–</td><td class="num" style="background:${bg};color:white">–</td>`;
         } else {
-          footerCells += `<td class="num ${sepClass}">${mm.totalSmall.toLocaleString('en-IN')}</td><td class="num">${mm.totalBig.toLocaleString('en-IN')}</td><td class="num">${mm.totalPuff.toLocaleString('en-IN')}</td><td class="num">${mm.grandTotal.toLocaleString('en-IN')}</td>`;
+          footerCells += `<td class="num date-sep-cell" style="background:${bg};color:white">${mm.totalSmall.toLocaleString('en-IN')}</td><td class="num" style="background:${bg};color:white">${mm.totalBig.toLocaleString('en-IN')}</td><td class="num" style="background:${bg};color:white">${mm.totalPuff.toLocaleString('en-IN')}</td><td class="num" style="background:${bg};color:white">${mm.grandTotal.toLocaleString('en-IN')}</td>`;
         }
       });
     } else {
       const mm = dateGroups[0].mmGroups.find(m => m.name === mmName);
       if (mm) {
-        footerCells = `<td class="num">${mm.totalSmall.toLocaleString('en-IN')}</td><td class="num">${mm.totalBig.toLocaleString('en-IN')}</td><td class="num">${mm.totalPuff.toLocaleString('en-IN')}</td><td class="num">${mm.grandTotal.toLocaleString('en-IN')}</td>`;
+        const cardColor = BASE_COLORS[idx % 6];
+        const bg = hexToRgba(cardColor, 0.74);
+        footerCells = `<td class="num" style="background:${bg};color:white">${mm.totalSmall.toLocaleString('en-IN')}</td><td class="num" style="background:${bg};color:white">${mm.totalBig.toLocaleString('en-IN')}</td><td class="num" style="background:${bg};color:white">${mm.totalPuff.toLocaleString('en-IN')}</td><td class="num" style="background:${bg};color:white">${mm.grandTotal.toLocaleString('en-IN')}</td>`;
       }
     }
 
@@ -945,7 +916,6 @@ async function processFile() {
     const { rows, sheetName } = await parseExcel(file);
     const dateGroups = groupByDateAndMM(rows, sheetName);
     if (!dateGroups.length) throw new Error('No MM data found. Check your Excel format.');
-    // For KPI bar, use totals from the latest date only (or all if single)
     const latestGroup = dateGroups[dateGroups.length - 1];
     const totals     = calculateTotals(latestGroup.mmGroups);
     const reportDate = formatDateRange(dateGroups);
@@ -1137,3 +1107,4 @@ function resetApp() {
 </script>
 </body>
 </html>
+
